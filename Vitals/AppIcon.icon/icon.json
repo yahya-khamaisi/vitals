@@ -1,0 +1,61 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.26000,0.84000,0.45000,1.00000",
+          "display-p3:0.07000,0.56000,0.30000,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.20000,0.20000,0.22000,1.00000",
+          "display-p3:0.06000,0.06000,0.07000,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "fill-specializations": [
+            { "value": "automatic" },
+            { "appearance": "dark", "value": { "solid": "display-p3:0.19000,0.82000,0.35000,1.00000" } }
+          ],
+          "glass": true,
+          "image-name": "pulse.svg",
+          "name": "pulse"
+        }
+      ],
+      "shadow": { "kind": "neutral", "opacity": 0.5 },
+      "specular": true,
+      "translucency": { "enabled": true, "value": 0.3 }
+    },
+    {
+      "layers": [
+        {
+          "fill-specializations": [
+            { "value": "automatic" },
+            { "appearance": "dark", "value": { "solid": "display-p3:0.92000,0.93000,0.96000,1.00000" } }
+          ],
+          "glass": true,
+          "image-name": "ring.svg",
+          "name": "ring",
+          "opacity": 0.55
+        }
+      ],
+      "shadow": { "kind": "neutral", "opacity": 0.4 },
+      "specular": true,
+      "translucency": { "enabled": true, "value": 0.5 }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
