@@ -25,6 +25,7 @@ struct Volume: Identifiable, Equatable {
 struct DiskStats {
     var volumes: [Volume] = []
     var readRate = 0.0, writeRate = 0.0       // bytes per second
+    var totalRead: UInt64 = 0, totalWrite: UInt64 = 0   // bytes since boot
     var mainUsedFraction: Double { volumes.first?.usedFraction ?? 0 }
 }
 
@@ -70,6 +71,8 @@ final class DiskReader {
             read += (s["Bytes (Read)"] as? NSNumber)?.uint64Value ?? 0
             write += (s["Bytes (Write)"] as? NSNumber)?.uint64Value ?? 0
         }
+        stats.totalRead = read
+        stats.totalWrite = write
         let now = Date()
         if let last = lastBytes {
             let dt = max(0.1, now.timeIntervalSince(lastTime))

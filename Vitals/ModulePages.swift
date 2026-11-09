@@ -259,16 +259,19 @@ struct DiskPage: View {
             }
             Card(padded: true) {
                 VStack(spacing: 8) {
-                    HStack(spacing: 10) {
-                        Text("Activity").fontWeight(.semibold).foregroundStyle(.secondary)
-                        Spacer()
-                        LegendDot(title: "Read", tint: .blue)
-                        LegendDot(title: "Write", tint: .orange)
+                    HStack {
+                        Stat(title: "Total read", value: Format.bytes(d.totalRead), tint: .blue, size: 17)
+                        Stat(title: "Total written", value: Format.bytes(d.totalWrite), tint: .orange, size: 17)
                     }
-                    .font(.system(size: 11)).frame(height: 14)
                     AreaChart(layers: [.init(values: monitor.series(.diskRead), tint: .blue),
                                        .init(values: monitor.series(.diskWrite), tint: .orange)], max: nil, mirrored: true)
                         .frame(height: 56)
+                    HStack {
+                        Text("Totals since boot")
+                        Spacer()
+                    }
+                    .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    .frame(height: 14)
                 }
             }
             ForEach(d.volumes) { v in VolumeCard(volume: v) }

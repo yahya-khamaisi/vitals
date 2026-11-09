@@ -83,6 +83,8 @@ enum Command {
             }
             out["disk.read"] = Int(m.disk.readRate)
             out["disk.write"] = Int(m.disk.writeRate)
+            out["disk.totalread"] = m.disk.totalRead
+            out["disk.totalwrite"] = m.disk.totalWrite
         }
         if all || target == "network" {
             out["network.down"] = Int(m.network.down)
