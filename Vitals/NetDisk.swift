@@ -26,6 +26,7 @@ struct DiskStats {
     var volumes: [Volume] = []
     var readRate = 0.0, writeRate = 0.0       // bytes per second
     var totalRead: UInt64 = 0, totalWrite: UInt64 = 0   // bytes since boot
+    var lifetime: (read: UInt64, write: UInt64)?          // bytes over the SSD's life, from NVMe SMART
     var mainUsedFraction: Double { volumes.first?.usedFraction ?? 0 }
 }
 
@@ -34,6 +35,8 @@ final class DiskReader {
     private var lastTime = Date()
     private var details: [URL: (media: String?, smart: String?)] = [:]
     private var detailsTime = Date.distantPast
+    private var lifetime: (read: UInt64, write: UInt64)?
+    private var lifetimeTime = Date.distantPast
 
     func read() -> DiskStats {
         var stats = DiskStats()
@@ -73,6 +76,12 @@ final class DiskReader {
         }
         stats.totalRead = read
         stats.totalWrite = write
+        // The drive's own counters only move in 512 KB steps; once a minute is plenty.
+        if Date().timeIntervalSince(lifetimeTime) > 60 {
+            lifetimeTime = Date()
+            lifetime = NVMeSMART.lifetimeBytes()
+        }
+        stats.lifetime = lifetime
         let now = Date()
         if let last = lastBytes {
             let dt = max(0.1, now.timeIntervalSince(lastTime))
@@ -82,6 +91,62 @@ final class DiskReader {
         lastBytes = (read, write)
         lastTime = now
         return stats
+    }
+}
+
+// MARK: - NVMe SMART
+
+/// Lifetime data read and written, straight from each NVMe drive's SMART log. Works without
+/// privileges through the system's NVMeSMARTLib plug-in (internal SSDs; USB enclosures rarely expose it).
+enum NVMeSMART {
+    /// Layout of IONVMeSMARTInterface from <IOKit/storage/nvme/NVMeSMARTLibExternal.h>, which Swift can't import.
+    private struct Interface {
+        var reserved: UnsafeMutableRawPointer?
+        var queryInterface: @convention(c) (UnsafeMutableRawPointer?, CFUUIDBytes, UnsafeMutablePointer<LPVOID?>?) -> HRESULT
+        var addRef: @convention(c) (UnsafeMutableRawPointer?) -> ULONG
+        var release: @convention(c) (UnsafeMutableRawPointer?) -> ULONG
+        var version: UInt16
+        var revision: UInt16
+        var readData: @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> IOReturn
+    }
+
+    private static let userClientType = CFUUIDGetConstantUUIDWithBytes(nil, 0xAA, 0x0F, 0xA6, 0xF9, 0xC2, 0xD6, 0x45, 0x7F,
+                                                                        0xB1, 0x0B, 0x59, 0xA1, 0x32, 0x53, 0x29, 0x2F)
+    private static let interfaceID = CFUUIDGetConstantUUIDWithBytes(nil, 0xCC, 0xD1, 0xDB, 0x19, 0xFD, 0x9A, 0x4D, 0xAF,
+                                                                     0xBF, 0x95, 0x12, 0x45, 0x4B, 0x23, 0x0A, 0xB6)
+    /// kIOCFPlugInInterfaceID, a C macro Swift doesn't see.
+    private static let plugInInterfaceID = CFUUIDGetConstantUUIDWithBytes(nil, 0xC2, 0x44, 0xE8, 0x58, 0x10, 0x9C, 0x11, 0xD4,
+                                                                           0x91, 0xD4, 0x00, 0x50, 0xE4, 0xC6, 0x42, 0x6F)
+
+    static func lifetimeBytes() -> (read: UInt64, write: UInt64)? {
+        var read: UInt64 = 0, write: UInt64 = 0, found = false
+        Sys.services("IOBlockStorageDevice") { device in
+            guard (Sys.registry(device, "NVMe SMART Capable") as? Bool) == true,
+                  let units = dataUnits(device) else { return }
+            // One data unit is 1,000 blocks of 512 bytes.
+            read &+= units.read &* 512_000
+            write &+= units.write &* 512_000
+            found = true
+        }
+        return found ? (read, write) : nil
+    }
+
+    private static func dataUnits(_ device: io_service_t) -> (read: UInt64, write: UInt64)? {
+        var plugin: UnsafeMutablePointer<UnsafeMutablePointer<IOCFPlugInInterface>?>?
+        var score: Int32 = 0
+        guard IOCreatePlugInInterfaceForService(device, userClientType, plugInInterfaceID, &plugin, &score) == KERN_SUCCESS,
+              let plugin, let vtable = plugin.pointee else { return nil }
+        defer { IODestroyPlugInInterface(plugin) }
+        var raw: LPVOID?
+        guard vtable.pointee.QueryInterface(plugin, CFUUIDGetUUIDBytes(interfaceID), &raw) == S_OK, let raw else { return nil }
+        let smart = raw.assumingMemoryBound(to: UnsafeMutablePointer<Interface>.self).pointee
+        defer { _ = smart.pointee.release(raw) }
+        let log = UnsafeMutableRawPointer.allocate(byteCount: 512, alignment: 8)
+        defer { log.deallocate() }
+        log.initializeMemory(as: UInt8.self, repeating: 0, count: 512)
+        guard smart.pointee.readData(raw, log) == kIOReturnSuccess else { return nil }
+        // NVMe SMART log: Data Units Read at byte 32, Data Units Written at byte 48 (low 64 bits of 128).
+        return (log.loadUnaligned(fromByteOffset: 32, as: UInt64.self), log.loadUnaligned(fromByteOffset: 48, as: UInt64.self))
     }
 }
 

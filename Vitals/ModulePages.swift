@@ -244,6 +244,7 @@ struct MemoryPage: View {
 struct DiskPage: View {
     @EnvironmentObject var monitor: Monitor
     @EnvironmentObject var nav: Navigator
+    @AppStorage("disk.totals.lifetime") private var showLifetime = false
 
     var body: some View {
         let d = monitor.disk
@@ -259,19 +260,31 @@ struct DiskPage: View {
             }
             Card(padded: true) {
                 VStack(spacing: 8) {
+                    if d.lifetime != nil {
+                        Picker("Totals", selection: $showLifetime) {
+                            Text("Since boot").tag(false)
+                            Text("Lifetime").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    let totals = showLifetime ? d.lifetime ?? (d.totalRead, d.totalWrite) : (d.totalRead, d.totalWrite)
                     HStack {
-                        Stat(title: "Total read", value: Format.bytes(d.totalRead), tint: .blue, size: 17)
-                        Stat(title: "Total written", value: Format.bytes(d.totalWrite), tint: .orange, size: 17)
+                        Stat(title: "Total read", value: Format.bytes(totals.0), tint: .blue, size: 17)
+                        Stat(title: "Total written", value: Format.bytes(totals.1), tint: .orange, size: 17)
                     }
                     AreaChart(layers: [.init(values: monitor.series(.diskRead), tint: .blue),
                                        .init(values: monitor.series(.diskWrite), tint: .orange)], max: nil, mirrored: true)
                         .frame(height: 56)
-                    HStack {
-                        Text("Totals since boot")
-                        Spacer()
+                    if d.lifetime == nil {
+                        HStack {
+                            Text("Totals since boot")
+                            Spacer()
+                        }
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .frame(height: 14)
                     }
-                    .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
-                    .frame(height: 14)
                 }
             }
             ForEach(d.volumes) { v in VolumeCard(volume: v) }
