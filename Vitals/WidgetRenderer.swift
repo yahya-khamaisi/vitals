@@ -42,7 +42,8 @@ enum WidgetRenderer {
     private static func piece(for module: Module, monitor: Monitor, config: WidgetConfig?) -> Piece {
         let w = config ?? monitor.config.widget(module)
         let value = monitor.fraction(module)
-        let tint = color(w.color, value)
+        // Memory follows the system's pressure level, like Activity Monitor; a full RAM isn't a problem on its own.
+        let tint = module == .memory && w.color == .byValue ? pressureColor(monitor.memory.pressureLevel) : color(w.color, value)
         let tag = w.showLabel ? module.tag : nil
 
         switch (module, w.style) {
@@ -101,7 +102,7 @@ enum WidgetRenderer {
         case .tachometer:
             return chart(width: 22, tag: tag, framed: false) { r in tachometer(value, in: r, tint: tint) }
         case .lineChart:
-            let series: Series = module == .gpu ? .gpu : module == .memory ? .memory : .cpuTotal
+            let series: Series = module == .gpu ? .gpu : module == .memory ? .pressure : .cpuTotal
             return chart(width: 34, tag: tag) { r in line(monitor.series(series), in: r, tint: tint) }
         case .barChart:
             let bars: [Double]
@@ -114,7 +115,7 @@ enum WidgetRenderer {
             return chart(width: CGFloat(bars.count) * (barWidth + 1) + 3, tag: tag) { r in
                 for (i, b) in bars.enumerated() {
                     let h = max(1, (r.height - 4) * CGFloat(min(1, b)))
-                    color(mode, b).setFill()
+                    (module == .memory ? tint : color(mode, b)).setFill()
                     NSBezierPath(rect: NSRect(x: r.minX + 2 + CGFloat(i) * (barWidth + 1), y: r.minY + 2, width: barWidth, height: h)).fill()
                 }
             }
@@ -315,6 +316,10 @@ enum WidgetRenderer {
     }
 
     // MARK: Values
+
+    private static func pressureColor(_ level: Int) -> NSColor {
+        level >= 4 ? .systemRed : level >= 2 ? .systemOrange : .systemGreen
+    }
 
     private static func color(_ mode: WidgetColor, _ v: Double) -> NSColor {
         switch mode {
